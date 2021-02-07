@@ -391,7 +391,10 @@ function abstract_call_method_with_const_args(interp::$(JETInterpreter), @nospec
     result = inf_result.result
     # if constant inference hits a cycle, just bail out
     isa(result, InferenceState) && return Any
-    add_backedge!(inf_result.linfo, sv)
+    #=== abstract_call_method_with_const_args patch point 3 start ===#
+    add_backedge!(mi, sv)
+    $update_reports!(interp, mi, sv)
+    #=== abstract_call_method_with_const_args patch point 3 end ===#
     return result
 end
 
@@ -400,6 +403,28 @@ end) # Core.eval(CC, quote
 
 end # function overload_abstract_call_method_with_const_args!()
 push_inithook!(overload_abstract_call_method_with_const_args!)
+
+# works within inter-procedural context
+function CC.abstract_call_method(interp::JETInterpreter, method::Method, @nospecialize(sig), sparams::SimpleVector, hardlimit::Bool, sv::InferenceState)
+    ret = @invoke abstract_call_method(interp::AbstractInterpreter, method::Method, sig, sparams::SimpleVector, hardlimit::Bool, sv::InferenceState)
+
+    edge = ret[3]
+    if isa(edge, MethodInstance)
+        update_reports!(interp, edge, sv)
+    end
+
+    return ret
+end
+
+function update_reports!(interp::JETInterpreter, edge::MethodInstance, sv::InferenceState)
+    rs = filter(r->first(r.st).linfo===edge, vcat(interp.reports, interp.uncaught_exceptions))
+    if !isempty(rs)
+        vf = get_virtual_frame(sv)
+        for r in rs
+            pushfirst!(r.st, vf)
+        end
+    end
+end
 
 function CC.abstract_eval_special_value(interp::JETInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
     ret = @invoke abstract_eval_special_value(interp::AbstractInterpreter, e, vtypes::VarTable, sv::InferenceState)

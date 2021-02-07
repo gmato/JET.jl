@@ -29,7 +29,7 @@ function CC.typeinf(interp::JETInterpreter, frame::InferenceState)
     # print_rails(io, depth)
     # printstyled(io, "└─→ "; color)
     # result = get_result(frame)
-    # isa(result, InferenceState) || printstyled(io, get_result(frame); color = TYPE_ANNOTATION_COLOR)
+    # isa(result, InferenceState) || printstyled(io, result; color = TYPE_ANNOTATION_COLOR)
     # printlnstyled(io, " ($(length(interp.reports)) reports)"; color = ERROR_COLOR)
 
     return ret
@@ -58,7 +58,7 @@ function CC._typeinf(interp::JETInterpreter, frame::InferenceState)
         # use `frame.linfo` instead of `frame` for lineage check since the program counter
         # for this frame is not initialized yet; note that `frame.linfo` is the exactly same
         # object as that of the previous only-type inference
-        filter!(r->!is_lineage(r.lineage, frame.parent::InferenceState, linfo), reports)
+        filter!(r->first(r.st).linfo===linfo, reports)
     end
 
     before = Set(reports)
@@ -143,14 +143,14 @@ function CC._typeinf(interp::JETInterpreter, frame::InferenceState)
             local_cache = cache[argtypes] = InferenceErrorReportCache[]
 
             for report in reports_for_this_linfo
-                cache_report!(report, linfo, local_cache)
+                cache_report!(report, local_cache, linfo)
             end
         elseif frame.cached # only cache when `NativeInterpreter` does
             @assert !haskey(JET_GLOBAL_CACHE, linfo) || isnothing(frame.parent) "invalid global caching"
             global_cache = JET_GLOBAL_CACHE[linfo] = InferenceErrorReportCache[]
 
             for report in reports_for_this_linfo
-                cache_report!(report, linfo, global_cache)
+                cache_report!(report, global_cache, linfo)
             end
         end
     end

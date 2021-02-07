@@ -35,9 +35,8 @@ function CC.get(wvc::WorldView{JETCache}, mi::MethodInstance, default)
         global_cache = get(JET_GLOBAL_CACHE, mi, nothing)
         if isa(global_cache, Vector{InferenceErrorReportCache})
             interp = wvc.cache.interp
-            caller = interp.current_frame::InferenceState
             for cached in global_cache
-                restore_cached_report!(cached, interp, caller)
+                restore_cached_report!(cached, interp)
             end
         end
     end
@@ -103,12 +102,12 @@ function CC.cache_lookup(linfo::MethodInstance, given_argtypes::Vector{Any}, cac
     sv = interp.current_frame::InferenceState
     if !isa(inf_result.result, InferenceState)
         # corresponds to report throw away logic in `_typeinf(interp::JETInterpreter, frame::InferenceState)`
-        filter!(r->!is_lineage(r.lineage, sv, inf_result.linfo), interp.reports)
+        filter!(r->first(r.st).linfo!==sv.linfo, interp.reports)
 
         local_cache = get(interp.cache, given_argtypes, nothing)
         if isa(local_cache, Vector{InferenceErrorReportCache})
             for cached in local_cache
-                restore_cached_report!(cached, interp, sv)
+                restore_cached_report!(cached, interp)
             end
         end
     end
