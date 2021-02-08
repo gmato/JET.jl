@@ -126,7 +126,8 @@ import JuliaInterpreter:
     maybe_evaluate_builtin,
     collect_args,
     is_return,
-    is_quotenode_egal
+    is_quotenode_egal,
+    @lookup
 
 using FileWatching, Requires
 
@@ -476,10 +477,27 @@ function collect_reports(actualmod, text, filename; jetconfigs...)
                                    interp,
                                    )
 
+    if !isempty(ret.toplevel_error_reports)
+        # non-empty `ret.toplevel_error_reports` means critical errors happened during
+        # the AST transformation, so they always have precedence over `ret.inference_error_reports`
+        return ret.included_files,
+               ret.toplevel_error_reports,
+               gen_postprocess(virtualmod, actualmod)
+    end
+
+    for tt in ret.method_signatures
+        interp = JETInterpreter(; # world age gets updated to take in newly added methods defined by `ConcreteInterpreter`
+                                  inf_params      = InferenceParams(interp),
+                                  opt_params      = OptimizationParams(interp),
+                                  analysis_params = AnalysisParams(interp),
+                                  )
+
+        profile_gf_by_type!(interp, tt)
+        append!(ret.inference_error_reports, interp.reports) # collect error reports
+    end
+
     return ret.included_files,
-           # non-empty `ret.toplevel_error_reports` means critical errors happened during
-           # the AST transformation, so they always have precedence over `ret.inference_error_reports`
-           !isempty(ret.toplevel_error_reports) ? ret.toplevel_error_reports : ret.inference_error_reports,
+           ret.inference_error_reports,
            gen_postprocess(virtualmod, actualmod)
 end
 
