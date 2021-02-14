@@ -37,6 +37,8 @@ function CC.get(wvc::WorldView{JETCache}, mi::MethodInstance, default)
             interp = wvc.cache.interp
             for cached in global_cache
                 restore_cached_report!(cached, interp)
+                l, r = first(cached.st).linfo, mi
+                @assert l === r "invalid global restoring $l $r"
             end
         end
     end
@@ -108,6 +110,8 @@ function CC.cache_lookup(linfo::MethodInstance, given_argtypes::Vector{Any}, cac
         if isa(local_cache, Vector{InferenceErrorReportCache})
             for cached in local_cache
                 restore_cached_report!(cached, interp)
+                l, r = first(cached.st).linfo, linfo
+                @assert l === r "invalid local restoring $l $r"
             end
         end
     end
