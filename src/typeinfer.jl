@@ -61,7 +61,7 @@ function CC._typeinf(interp::JETInterpreter, frame::InferenceState)
         filter!(r->first(r.st).linfo===linfo, reports)
     end
 
-    before = Set(reports)
+    br, be = Set(reports), Set(interp.uncaught_exceptions)
 
     ret = @invoke _typeinf(interp::AbstractInterpreter, frame::InferenceState)
 
@@ -89,10 +89,9 @@ function CC._typeinf(interp::JETInterpreter, frame::InferenceState)
 
     # XXX this is a dirty fix for performance problem, we need more "proper" fix
     # https://github.com/aviatesk/JET.jl/issues/75
-    unique!(get_identity_key, interp.reports)
+    unique!(get_identity_key, reports)
 
-    after = Set(interp.reports)
-    reports_for_this_linfo = setdiff(after, before)
+    ar = Set(reports)
 
     # report `throw` calls "appropriately"
     if get_result(frame) === Bottom
@@ -129,12 +128,12 @@ function CC._typeinf(interp::JETInterpreter, frame::InferenceState)
         empty!(interp.uncaught_exceptions)
     end
 
-    # cache uncaught exceptions so far
-    if !isempty(interp.uncaught_exceptions)
-        push!(reports_for_this_linfo, interp.uncaught_exceptions...)
-    end
+    ae = Set(interp.uncaught_exceptions)
 
-    if !isempty(reports_for_this_linfo)
+    # compute JET analysis results that should be cached for this linfo
+    this_caches = union!(setdiff(ar, br), setdiff(ae, be))
+
+    if !isempty(this_caches)
         if iscp
             argtypes = frame.result.argtypes
             cache = interp.cache
@@ -142,7 +141,7 @@ function CC._typeinf(interp::JETInterpreter, frame::InferenceState)
             @assert !haskey(cache, argtypes) "invalid local caching $argtypes"
             local_cache = cache[argtypes] = InferenceErrorReportCache[]
 
-            for report in reports_for_this_linfo
+            for report in this_caches
                 l, r = first(report.st).linfo, linfo
                 @assert l === r "invalid local caching $l (expected: $r)"
                 cache_report!(report, local_cache)
@@ -151,7 +150,7 @@ function CC._typeinf(interp::JETInterpreter, frame::InferenceState)
             @assert !haskey(JET_GLOBAL_CACHE, linfo) || isnothing(frame.parent) "invalid global caching $linfo"
             global_cache = JET_GLOBAL_CACHE[linfo] = InferenceErrorReportCache[]
 
-            for report in reports_for_this_linfo
+            for report in this_caches
                 l, r = first(report.st).linfo, linfo
                 @assert l === r "invalid global caching $l (expected: $r)"
                 cache_report!(report, global_cache)
