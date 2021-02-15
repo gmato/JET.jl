@@ -104,7 +104,14 @@ function CC.cache_lookup(linfo::MethodInstance, given_argtypes::Vector{Any}, cac
     sv = interp.current_frame::InferenceState
     if !isa(inf_result.result, InferenceState)
         # corresponds to report throw away logic in `_typeinf(interp::JETInterpreter, frame::InferenceState)`
-        filter!(r->first(r.st).linfo!==sv.linfo, interp.reports)
+        # filter!(r->first(r.st).linfo!==sv.linfo, interp.reports)
+        parent_linfo = sv.linfo
+        @inbounds filter!(interp.reports) do r
+            st = r.st
+            st[1].linfo === parent_linfo || return true
+            length(st) > 1 || return true
+            return st[2].linfo !== linfo
+        end
 
         local_cache = get(interp.cache, given_argtypes, nothing)
         if isa(local_cache, Vector{InferenceErrorReportCache})
